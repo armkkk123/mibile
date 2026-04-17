@@ -893,14 +893,59 @@ local function findChests(amount, flagKey, worldName)
                 end
             end
 
-            -- เปิดไฟพ่น (ส่งคำสั่งไปที่เซิร์ฟเวอร์โดยตรง ใช้ได้ทั้ง PC/Mobile เพราะแก้บัค __namecall แล้ว)
+            -- ฟังก์ชันกดปุ่มพ่นไฟ (โจมตี UI โดยตรงเหมือนที่เคยทำกับบอส)
+            local function toggleMobileFire()
+                pcall(function()
+                    -- ดึงปุ่มตาม Path ที่สแกนได้เป๊ะๆ
+                    local fireBtn = LP:FindFirstChild("PlayerGui") 
+                        and LP.PlayerGui:FindFirstChild("HUDGui") 
+                        and LP.PlayerGui.HUDGui:FindFirstChild("BottomFrame") 
+                        and LP.PlayerGui.HUDGui.BottomFrame:FindFirstChild("MobileControlsFrame") 
+                        and LP.PlayerGui.HUDGui.BottomFrame.MobileControlsFrame:FindFirstChild("TouchControlFrame") 
+                        and LP.PlayerGui.HUDGui.BottomFrame.MobileControlsFrame.TouchControlFrame:FindFirstChild("JumpButton") 
+                        and LP.PlayerGui.HUDGui.BottomFrame.MobileControlsFrame.TouchControlFrame.JumpButton:FindFirstChild("Frame") 
+                        and LP.PlayerGui.HUDGui.BottomFrame.MobileControlsFrame.TouchControlFrame.JumpButton.Frame:FindFirstChild("Fire")
+                    
+                    if fireBtn and (fireBtn:IsA("GuiObject")) then
+                        -- วิธีที่ 1: ตีตรงเข้าสัญญาณภายในของปุ่ม (ทะลุทุกหน้าจอ ไม่สนพิกัด)
+                        if firesignal then
+                            pcall(function() firesignal(fireBtn.TouchTap) end)
+                            pcall(function() firesignal(fireBtn.MouseButton1Click) end)
+                            pcall(function() firesignal(fireBtn.Activated) end)
+                        end
+                        if getconnections then
+                            pcall(function()
+                                for _, conn in pairs(getconnections(fireBtn.Activated)) do
+                                    conn:Fire()
+                                end
+                            end)
+                        end
+                        
+                        -- วิธีที่ 2: จำลองนิ้วแตะกึ่งกลางปุ่มแบบเป๊ะๆ (ลบการชดเชย +36 ออก เพราะจอแต่ละคนทดไม่เหมือนกัน)
+                        local cx = fireBtn.AbsolutePosition.X + (fireBtn.AbsoluteSize.X / 2)
+                        local cy = fireBtn.AbsolutePosition.Y + (fireBtn.AbsoluteSize.Y / 2)
+                        
+                        local vim = game:GetService("VirtualInputManager")
+                        vim:SendTouchEvent(15, 0, cx, cy) -- แตะลง
+                        task.wait(0.05)
+                        vim:SendTouchEvent(15, 2, cx, cy) -- ปล่อยนิ้ว
+                    end
+                end)
+            end
+            
+            -- เปิดไฟพ่น
             local dragon = getActiveDragonModel()
             local breathR = dragon and dragon:FindFirstChild("Remotes") and dragon.Remotes:FindFirstChild("BreathFireRemote")
+            local isMobile = game:GetService("UserInputService").TouchEnabled
             
             -- รีฟิลหลอดพ่นไฟให้เต็มก่อน (แก้บัคกดพ่นแล้วไม่ออกเพราะมานาหมด)
             if dragon then pcall(refillDragonBreathFuel, dragon) end
             
-            if breathR then breathR:FireServer(true) end
+            if isMobile then
+                toggleMobileFire() -- สั่งแตะปุ่ม UI 1 ครั้งเพื่อเปิดพ่นไฟ
+            else
+                if breathR then breathR:FireServer(true) end
+            end
             
             -- 🌪️ ระบบหมุนควงสว่าน 360 องศา (X และ Y)
             unlockPlayerFromMonster() -- ปลดล็อคระบบเดิมก่อน
@@ -955,7 +1000,11 @@ local function findChests(amount, flagKey, worldName)
             if spinConn then spinConn:Disconnect() spinConn = nil end
             
             -- ปิดไฟพ่น
-            if breathR then breathR:FireServer(false) end
+            if isMobile then
+                toggleMobileFire() -- สั่งแตะปุ่ม UI อีก 1 ครั้งเพื่อปิดพ่นไฟ
+            else
+                if breathR then breathR:FireServer(false) end
+            end
 
             -- เปิดหีบเก็บของ
             local nodeID = tonumber(nearest.Parent and nearest.Parent.Name)
