@@ -893,19 +893,14 @@ local function findChests(amount, flagKey, worldName)
                 end
             end
 
-            -- เปิดไฟพ่น (Mobile = กดปุ่มพ่นจอค้าง, PC = ใช้ Remote/Mouse)
+            -- เปิดไฟพ่น (ส่งคำสั่งไปที่เซิร์ฟเวอร์โดยตรง ใช้ได้ทั้ง PC/Mobile เพราะแก้บัค __namecall แล้ว)
             local dragon = getActiveDragonModel()
             local breathR = dragon and dragon:FindFirstChild("Remotes") and dragon.Remotes:FindFirstChild("BreathFireRemote")
-            local isMobile = game:GetService("UserInputService").TouchEnabled
             
             -- รีฟิลหลอดพ่นไฟให้เต็มก่อน (แก้บัคกดพ่นแล้วไม่ออกเพราะมานาหมด)
             if dragon then pcall(refillDragonBreathFuel, dragon) end
             
-            if isMobile then
-                toggleMobileFire() -- แตะปุ่ม UI 1 ครั้งเพื่อเริ่มพ่น
-            else
-                if breathR then breathR:FireServer(true) end
-            end
+            if breathR then breathR:FireServer(true) end
             
             -- 🌪️ ระบบหมุนควงสว่าน 360 องศา (X และ Y)
             unlockPlayerFromMonster() -- ปลดล็อคระบบเดิมก่อน
@@ -943,18 +938,10 @@ local function findChests(amount, flagKey, worldName)
                 -- รีฟิลเกจตลอดระหว่างตี
                 if dragon then pcall(refillDragonBreathFuel, dragon) end
                 
-                -- โจมตี Backup: จำลองจิ้มตีกลางจอ (Bite Attack) รองรับทั้ง PC/Mobile
+                -- โจมตี Backup: สำหรับ PC ให้ส่งเมาส์คลิกคลิกได้ไม่มีปัญหา
+                -- แต่บนมือถือ ยกเลิกการจำลองจิ้มกลางจอ เพราะมันไปกวนการแตะหน้าจอ/กดปุ่ม UI รัวๆ
                 pcall(function()
-                    if isMobile then
-                        local vim = game:GetService("VirtualInputManager")
-                        local cam = workspace.CurrentCamera
-                        if cam then
-                            local cx, cy = cam.ViewportSize.X / 2, cam.ViewportSize.Y / 2
-                            vim:SendTouchEvent(1, 0, cx, cy) -- แตะเพื่อสั่งตี
-                            task.wait(0.05)
-                            vim:SendTouchEvent(1, 2, cx, cy)
-                        end
-                    else
+                    if not isMobile then
                         mouse1press()
                         task.wait(0.05)
                         mouse1release()
@@ -968,11 +955,7 @@ local function findChests(amount, flagKey, worldName)
             if spinConn then spinConn:Disconnect() spinConn = nil end
             
             -- ปิดไฟพ่น
-            if isMobile then
-                toggleMobileFire() -- แตะปุ่ม UI อีก 1 ครั้งเพื่อยกเลิกพ่น
-            else
-                if breathR then breathR:FireServer(false) end
-            end
+            if breathR then breathR:FireServer(false) end
 
             -- เปิดหีบเก็บของ
             local nodeID = tonumber(nearest.Parent and nearest.Parent.Name)
