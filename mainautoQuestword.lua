@@ -893,42 +893,52 @@ local function findChests(amount, flagKey, worldName)
                 end
             end
 
-            -- ฟังก์ชันกดปุ่มพ่นไฟ (โจมตี UI โดยตรงเหมือนที่เคยทำกับบอส)
+            -- ฟังก์ชันกดปุ่มพ่นไฟ (ยิงคำสั่งแบบคลุมทุกกรณี ทั้งปุ่มนอก/ปุ่มใน)
             local function toggleMobileFire()
                 pcall(function()
-                    -- ดึงปุ่มตาม Path ที่สแกนได้เป๊ะๆ
-                    local fireBtn = LP:FindFirstChild("PlayerGui") 
+                    local JumpBtn = LP:FindFirstChild("PlayerGui") 
                         and LP.PlayerGui:FindFirstChild("HUDGui") 
                         and LP.PlayerGui.HUDGui:FindFirstChild("BottomFrame") 
                         and LP.PlayerGui.HUDGui.BottomFrame:FindFirstChild("MobileControlsFrame") 
                         and LP.PlayerGui.HUDGui.BottomFrame.MobileControlsFrame:FindFirstChild("TouchControlFrame") 
                         and LP.PlayerGui.HUDGui.BottomFrame.MobileControlsFrame.TouchControlFrame:FindFirstChild("JumpButton") 
-                        and LP.PlayerGui.HUDGui.BottomFrame.MobileControlsFrame.TouchControlFrame.JumpButton:FindFirstChild("Frame") 
-                        and LP.PlayerGui.HUDGui.BottomFrame.MobileControlsFrame.TouchControlFrame.JumpButton.Frame:FindFirstChild("Fire")
-                    
-                    if fireBtn and (fireBtn:IsA("GuiObject")) then
-                        -- วิธีที่ 1: ตีตรงเข้าสัญญาณภายในของปุ่ม (ทะลุทุกหน้าจอ ไม่สนพิกัด)
-                        if firesignal then
-                            pcall(function() firesignal(fireBtn.TouchTap) end)
-                            pcall(function() firesignal(fireBtn.MouseButton1Click) end)
-                            pcall(function() firesignal(fireBtn.Activated) end)
-                        end
-                        if getconnections then
-                            pcall(function()
-                                for _, conn in pairs(getconnections(fireBtn.Activated)) do
-                                    conn:Fire()
-                                end
-                            end)
-                        end
                         
-                        -- วิธีที่ 2: จำลองนิ้วแตะกึ่งกลางปุ่มแบบเป๊ะๆ (ลบการชดเชย +36 ออก เพราะจอแต่ละคนทดไม่เหมือนกัน)
-                        local cx = fireBtn.AbsolutePosition.X + (fireBtn.AbsoluteSize.X / 2)
-                        local cy = fireBtn.AbsolutePosition.Y + (fireBtn.AbsoluteSize.Y / 2)
+                    local fireBtn = JumpBtn and JumpBtn:FindFirstChild("Frame") and JumpBtn.Frame:FindFirstChild("Fire")
+                    
+                    -- เป้าหมายคือทั้งปุ่ม Fire ด้านใน และตัว JumpButton ด้านนอกเผื่อว่าการคลิกผูกกับโฟลเดอร์แม่
+                    local targets = {fireBtn, JumpBtn}
+                    
+                    if firesignal or getconnections then
+                        for _, target in ipairs(targets) do
+                            if target and target:IsA("GuiObject") then
+                                -- จำลองการกด (Touch Begin/MouseButton1Down)
+                                local mockInput = {UserInputType = Enum.UserInputType.Touch, UserInputState = Enum.UserInputState.Begin}
+                                if firesignal then
+                                    pcall(function() firesignal(target.InputBegan, mockInput) end)
+                                    pcall(function() firesignal(target.MouseButton1Down) end)
+                                    pcall(function() firesignal(target.Activated) end)
+                                end
+                                if getconnections then
+                                    pcall(function()
+                                        for _, conn in pairs(getconnections(target.InputBegan)) do conn:Fire(mockInput) end
+                                        for _, conn in pairs(getconnections(target.MouseButton1Down)) do conn:Fire() end
+                                        for _, conn in pairs(getconnections(target.Activated)) do conn:Fire() end
+                                    end)
+                                end
+                            end
+                        end
+                    end
+                    
+                    -- ใช้ นิ้วจำลองที่แม่นยำที่สุด (ชดเชยค่ารอยบากของหน้าจอมือถือ)
+                    if fireBtn and fireBtn:IsA("GuiObject") then
+                        local inset, _ = game:GetService("GuiService"):GetGuiInset()
+                        local cx = fireBtn.AbsolutePosition.X + (fireBtn.AbsoluteSize.X / 2) + inset.X
+                        local cy = fireBtn.AbsolutePosition.Y + (fireBtn.AbsoluteSize.Y / 2) + inset.Y
                         
                         local vim = game:GetService("VirtualInputManager")
-                        vim:SendTouchEvent(15, 0, cx, cy) -- แตะลง
+                        vim:SendTouchEvent(22, 0, cx, cy) -- แตะลง
                         task.wait(0.05)
-                        vim:SendTouchEvent(15, 2, cx, cy) -- ปล่อยนิ้ว
+                        vim:SendTouchEvent(22, 2, cx, cy) -- ปล่อยนิ้ว
                     end
                 end)
             end
