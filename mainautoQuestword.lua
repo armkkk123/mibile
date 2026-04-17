@@ -860,27 +860,23 @@ local function findChests(amount, flagKey, worldName)
             -- 🚀 บินไปอยู่เหนือหีบเตรียมทำพายุพ่นไฟ
             flyTo(CFrame.new(chestPos + Vector3.new(0, 8, 0)))
             
-            -- ฟังก์ชันจำลองการกดปุ่มพ่นไฟด้วยระบบค้นหาด้วยรูปภาพ (Image Tracking)
-            local function toggleMobileFire(targetImageId)
+            -- ฟังก์ชันจำลองการกดปุ่มพ่นไฟ (ใช้ Path จากผลสแกนของลูกพี่)
+            local function toggleMobileFire()
                 local UIS = game:GetService("UserInputService")
                 if not UIS.TouchEnabled then return end
                 
-                -- สแกนหาปุ่มที่เป็นรูปไฟพ่นจากทั่วทั้ง PlayerGui
-                local fireBtn = nil
-                local pGui = LP:FindFirstChild("PlayerGui")
-                if pGui then
-                    for _, gui in pairs(pGui:GetDescendants()) do
-                        if (gui:IsA("ImageButton") or gui:IsA("ImageLabel")) and gui.Visible then
-                            if string.match(tostring(gui.Image), targetImageId) then
-                                fireBtn = gui
-                                break
-                            end
-                        end
-                    end
-                end
+                -- ดึงปุ่มตาม Path ที่สแกนได้เป๊ะๆ
+                local fireBtn = LP:FindFirstChild("PlayerGui") 
+                    and LP.PlayerGui:FindFirstChild("HUDGui") 
+                    and LP.PlayerGui.HUDGui:FindFirstChild("BottomFrame") 
+                    and LP.PlayerGui.HUDGui.BottomFrame:FindFirstChild("MobileControlsFrame") 
+                    and LP.PlayerGui.HUDGui.BottomFrame.MobileControlsFrame:FindFirstChild("TouchControlFrame") 
+                    and LP.PlayerGui.HUDGui.BottomFrame.MobileControlsFrame.TouchControlFrame:FindFirstChild("JumpButton") 
+                    and LP.PlayerGui.HUDGui.BottomFrame.MobileControlsFrame.TouchControlFrame.JumpButton:FindFirstChild("Frame") 
+                    and LP.PlayerGui.HUDGui.BottomFrame.MobileControlsFrame.TouchControlFrame.JumpButton.Frame:FindFirstChild("Fire")
                 
                 -- ถ้าหาปุ่มเจอ ให้ดึงพิกัดกึ่งกลางและจำลองการแตะ
-                if fireBtn then
+                if fireBtn and (fireBtn:IsA("GuiObject")) then
                     local btnPos = fireBtn.AbsolutePosition
                     local btnSize = fireBtn.AbsoluteSize
                     
@@ -906,8 +902,7 @@ local function findChests(amount, flagKey, worldName)
             if dragon then pcall(refillDragonBreathFuel, dragon) end
             
             if isMobile then
-                -- TODO: ใส่รหัสภาพที่สแกนได้ตรงนี้
-                toggleMobileFire("13552838816") -- แตะปุ่ม UI 1 ครั้งเพื่อเริ่มพ่น
+                toggleMobileFire() -- แตะปุ่ม UI 1 ครั้งเพื่อเริ่มพ่น
             else
                 if breathR then breathR:FireServer(true) end
             end
@@ -974,7 +969,7 @@ local function findChests(amount, flagKey, worldName)
             
             -- ปิดไฟพ่น
             if isMobile then
-                toggleMobileFire("13552838816") -- แตะปุ่ม UI อีก 1 ครั้งเพื่อยกเลิกพ่น
+                toggleMobileFire() -- แตะปุ่ม UI อีก 1 ครั้งเพื่อยกเลิกพ่น
             else
                 if breathR then breathR:FireServer(false) end
             end
