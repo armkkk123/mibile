@@ -900,6 +900,9 @@ local function findChests(amount, flagKey, worldName)
             local breathR = dragon and dragon:FindFirstChild("Remotes") and dragon.Remotes:FindFirstChild("BreathFireRemote")
             local isMobile = game:GetService("UserInputService").TouchEnabled
             
+            -- รีฟิลหลอดพ่นไฟให้เต็มก่อน (แก้บัคกดพ่นแล้วไม่ออกเพราะมานาหมด)
+            if dragon then pcall(refillDragonBreathFuel, dragon) end
+            
             if isMobile then
                 toggleMobileFire() -- แตะปุ่ม UI 1 ครั้งเพื่อเริ่มพ่น
             else
@@ -933,21 +936,32 @@ local function findChests(amount, flagKey, worldName)
                 local dead = hrp:FindFirstChild("Dead")
                 if (dead and dead.Value == true) or (hp and hp.Value <= 0) then break end
                 
-                -- ระบบป้องกันหีบบัค: ถ้าติดเกิน 5 วิ แสดงว่าบัค ให้ทำลายหีบนั้นทิ้งและข้ามทันที
                 if os.clock() - t > 5 then 
                     pcall(function() nearest:Destroy() end)
                     warn("⚠️ [Chest Finder] ข้ามหีบเนื่องจากบัค (ใช้เวลาเกิน 5 seconds)")
                     break 
                 end
                 
-                -- ถ้าเป็น PC ให้ใช้ Mouse แบบเดิม (มือถือจำลองกดปุ่มค้างไปแล้ว เลยซิงค์ดาเมจไปเรื่อยๆ)
-                if not isMobile then
-                    pcall(function()
+                -- รีฟิลเกจตลอดระหว่างตี
+                if dragon then pcall(refillDragonBreathFuel, dragon) end
+                
+                -- โจมตี Backup: จำลองจิ้มตีกลางจอ (Bite Attack) รองรับทั้ง PC/Mobile
+                pcall(function()
+                    if isMobile then
+                        local vim = game:GetService("VirtualInputManager")
+                        local cam = workspace.CurrentCamera
+                        if cam then
+                            local cx, cy = cam.ViewportSize.X / 2, cam.ViewportSize.Y / 2
+                            vim:SendTouchEvent(1, 0, cx, cy) -- แตะเพื่อสั่งตี
+                            task.wait(0.05)
+                            vim:SendTouchEvent(1, 2, cx, cy)
+                        end
+                    else
                         mouse1press()
-                        task.wait(0.1)
+                        task.wait(0.05)
                         mouse1release()
-                    end)
-                end
+                    end
+                end)
                 task.wait(0.15)
             end
             
