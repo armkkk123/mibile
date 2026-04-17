@@ -862,17 +862,55 @@ local function findChests(amount, flagKey, worldName)
             local hrp = nearest.HumanoidRootPart
             local chestPos = hrp.Position
             
+            -- 📦 หีบไม่ใช่มอน ไม่ตีกลับ → ปิดระบบป้องกันทั้งหมดชั่วคราว เพื่อให้พ่นไฟได้ปกติ
+            stopGhostHeartbeat()
+            disableHardCameraLock()
+            antiHitApplied = false
+            warn("📦 [Chest] ปิดระบบป้องกันชั่วคราว (หีบไม่ตีกลับ)")
+            
             -- 🚀 บินไปอยู่เหนือหีบเตรียมทำพายุพ่นไฟ
             flyTo(CFrame.new(chestPos + Vector3.new(0, 8, 0)))
             
-            -- เปิดไฟพ่น
+            -- ฟังก์ชันจำลองการกดปุ่มพ่นไฟในจอมือถือ
+            local function toggleMobileFire()
+                local UIS = game:GetService("UserInputService")
+                if not UIS.TouchEnabled then return end
+                
+                local fireBtn = LP:FindFirstChild("PlayerGui") 
+                    and LP.PlayerGui:FindFirstChild("HUDGui") 
+                    and LP.PlayerGui.HUDGui:FindFirstChild("BottomFrame") 
+                    and LP.PlayerGui.HUDGui.BottomFrame:FindFirstChild("MobileControlsFrame") 
+                    and LP.PlayerGui.HUDGui.BottomFrame.MobileControlsFrame:FindFirstChild("TouchControlFrame") 
+                    and LP.PlayerGui.HUDGui.BottomFrame.MobileControlsFrame.TouchControlFrame:FindFirstChild("JumpButton") 
+                    and LP.PlayerGui.HUDGui.BottomFrame.MobileControlsFrame.TouchControlFrame.JumpButton:FindFirstChild("Frame") 
+                    and LP.PlayerGui.HUDGui.BottomFrame.MobileControlsFrame.TouchControlFrame.JumpButton.Frame:FindFirstChild("Fire")
+                
+                if fireBtn and fireBtn.Visible then
+                    local btnPos = fireBtn.AbsolutePosition
+                    local btnSize = fireBtn.AbsoluteSize
+                    -- หาจุดกึ่งกลางของปุ่ม (บวก Topbar Inset ชดเชยสำหรับหน้าจอมือถือ)
+                    local cx = btnPos.X + (btnSize.X / 2)
+                    local cy = btnPos.Y + (btnSize.Y / 2) + 36 
+                    
+                    pcall(function()
+                        local vim = game:GetService("VirtualInputManager")
+                        vim:SendTouchEvent(0, 0, cx, cy) -- แตะลง
+                        task.wait(0.05)
+                        vim:SendTouchEvent(0, 2, cx, cy) -- ปล่อยนิ้ว
+                    end)
+                end
+            end
+
+            -- เปิดไฟพ่น (Mobile = กดปุ่มพ่นจอค้าง, PC = ใช้ Remote/Mouse)
             local dragon = getActiveDragonModel()
             local breathR = dragon and dragon:FindFirstChild("Remotes") and dragon.Remotes:FindFirstChild("BreathFireRemote")
-            if breathR then breathR:FireServer(true) end
-            -- 📱 Mobile: เปิดระบบจำลองคลิกปุ่มพ่นไฟบน UI
-            toggleMobileFire(true)
-            -- เติมเกจพ่นไฟก่อนตีหีบ
-            refillDragonBreathFuel(dragon)
+            local isMobile = game:GetService("UserInputService").TouchEnabled
+            
+            if isMobile then
+                toggleMobileFire() -- แตะปุ่ม UI 1 ครั้งเพื่อเริ่มพ่น
+            else
+                if breathR then breathR:FireServer(true) end
+            end
             
             -- 🌪️ ระบบหมุนควงสว่าน 360 องศา (X และ Y)
             unlockPlayerFromMonster() -- ปลดล็อคระบบเดิมก่อน
@@ -908,23 +946,36 @@ local function findChests(amount, flagKey, worldName)
                     break 
                 end
                 
-                -- 💥 จำลองคลิค (Mobile = Touch Tap, PC = Mouse Click)
-                -- mobile executor (Delta/Fluxus) จะแปลงเป็น Touch ให้อัตโนมัติ
-                pcall(function()
-                    mouse1press()
-                    task.wait(0.1)
-                    mouse1release()
-                end)
+                -- ถ้าเป็น PC ให้ใช้ Mouse แบบเดิม (มือถือจำลองกดปุ่มค้างไปแล้ว เลยซิงค์ดาเมจไปเรื่อยๆ)
+                if not isMobile then
+                    pcall(function()
+                        mouse1press()
+                        task.wait(0.1)
+                        mouse1release()
+                    end)
+                end
                 task.wait(0.15)
             end
             
             -- หยุดหมุน 360 องศาเมื่อหีบพังเสร็จแล้ว
             chestLocker = false
             if spinConn then spinConn:Disconnect() spinConn = nil end
-            if breathR then breathR:FireServer(false) end
-            -- 📱 Mobile: ปิดระบบจำลองคลิกปุ่มพ่นไฟ
-            toggleMobileFire(false)
+            
+            -- ปิดไฟพ่น
+            if isMobile then
+                toggleMobileFire() -- แตะปุ่ม UI อีก 1 ครั้งเพื่อยกเลิกพ่น
+            else
+                if breathR then breathR:FireServer(false) end
+            end
 
+            -- 📦 หีบพังแล้ว → เปิดระบบป้องกันกลับคืน
+            if isAntiHitActive() then
+                applyHardCameraLock()
+                startGhostHeartbeat()
+                antiHitApplied = true
+                warn("📦 [Chest] เปิดระบบป้องกันกลับคืนแล้ว!")
+            end
+            
             -- เปิดหีบเก็บของ
             local nodeID = tonumber(nearest.Parent and nearest.Parent.Name)
             if nodeID then
@@ -1003,53 +1054,6 @@ _G.AutoQuestWasteland = false
 local vim = game:GetService("VirtualInputManager")
 local Remotes = ReplicatedStorage:WaitForChild("Remotes")
 local HitRemote = Remotes:FindFirstChild("ClientDestructibleHitRemote")
-
--- [[ 📱 MOBILE FIRE SYSTEM: จำลองคลิกปุ่มพ่นไฟบน UI สำหรับมือถือ ]]
--- ใช้ SendMouseButtonEvent คลิกปุ่ม Fire ใน GUI ของเกม (ผ่านเทสแล้ว 100%)
--- ไม่แตะ hookmetamethod เลย! ไม่มีทางทำให้ระบบอมตะพัง!
-local _isMobileDevice = game:GetService("UserInputService").TouchEnabled
-
-local _mobileFireActive = false
-local _mobileFireThread = nil
-
-local function findFireButton()
-    local pg = LP:FindFirstChild("PlayerGui")
-    if not pg then return nil end
-    for _, desc in ipairs(pg:GetDescendants()) do
-        if desc:IsA("GuiButton") and desc.Name == "Fire" and desc.Visible then
-            return desc
-        end
-    end
-    return nil
-end
-
-local function toggleMobileFire(state)
-    if not _isMobileDevice then return end
-    if state then
-        if _mobileFireActive then return end
-        _mobileFireActive = true
-        _mobileFireThread = task.spawn(function()
-            while _mobileFireActive do
-                pcall(function()
-                    local btn = findFireButton()
-                    if btn then
-                        local pos = btn.AbsolutePosition
-                        local size = btn.AbsoluteSize
-                        local cx = pos.X + size.X / 2
-                        local cy = pos.Y + size.Y / 2 + 36
-                        vim:SendMouseButtonEvent(cx, cy, 0, true, game, 0)
-                        task.wait(0.05)
-                        vim:SendMouseButtonEvent(cx, cy, 0, false, game, 0)
-                    end
-                end)
-                task.wait(0.15)
-            end
-        end)
-    else
-        _mobileFireActive = false
-        _mobileFireThread = nil
-    end
-end
 
 local function fastClick(obj)
     if not obj then return end
