@@ -45,33 +45,9 @@ local function showCenterWarning(active, text)
 end
 
 -- [[ 🛡️ SHIELD + 👻 GHOST MODE DAMAGE BLOCKER ]]
--- ⚠️ Mobile-Safe: ข้าม Hook ทุกชนิดแบบ 100% บนมือถือ
--- Mobile Executors (Delta/Fluxus) มีปัญหาเรื่อง hookmetamethod ที่ทำให้ Remote Arguments คลาดเคลื่อน
--- อาการ: เกมรับรู้ว่ากดพ่นไฟ (ตัวแข็ง/ล็อคเดิน) แต่เซิร์ฟเวอร์ไม่ตอบสนอง เพราะ Remote ส่งข้อมูลแหว่ง
-local _isMobileDevice = game:GetService("UserInputService").TouchEnabled
-local oldNamecall
-
-if not _isMobileDevice then
-    oldNamecall = hookmetamethod(game, "__namecall", newcclosure(function(self, ...)
-        local method = getnamecallmethod()
-        -- ⚡ Fast exit: ถ้าไม่ใช่ FireServer/InvokeServer ปล่อยผ่านทันที (ไม่แตะ method อื่นเลย)
-        if method ~= "FireServer" and method ~= "InvokeServer" then
-            return oldNamecall(self, ...)
-        end
-        if not checkcaller() then
-            if typeof(self) == "Instance" then
-                local n = self.Name
-                if n == "Ban" or n == "Kick" or n == "Report" then return nil end
-                -- [[ 👻 GHOST MODE: Network-level damage blocking ]]
-                if _G.GhostMode and n == "MobDamageRemote" then return nil end
-            end
-        end
-        return oldNamecall(self, ...)
-    end))
-    warn("🛡️ [PC] __namecall hook installed (Anti-Ban/GhostMode)")
-else
-    warn("📱 [Mobile] __namecall hook SKIPPED (Bypassing executor vararg corruption)")
-end
+-- ปิด Hook ถาวรเพื่อทดสอบว่ามาจาก Hook จริงรับประกัน 100%
+-- local oldNamecall
+-- oldNamecall = hookmetamethod(game, "__namecall", newcclosure(function(...) return oldNamecall(...) end))
 
 -- [[ 🧲 AUTO COLLECT DROPS (MAGNET) ]]
 task.spawn(function()
@@ -1612,24 +1588,9 @@ end
 -- ============================================================
 -- [[ ✈️ FIX TWEEN SHAKE - แก้อาการสั่นตอนเคลื่อนที่ ]]
 -- ============================================================
--- ⚠️ Mobile-Safe: ข้าม __newindex hook บนมือถือเด็ดขาด!
--- เหตุผล: Mobile executor (Delta/Fluxus) มีบัคเรื่อง hookmetamethod(__newindex)
--- ทำให้ property writes ของเกมหายไปเงียบๆ → Dragon Fire Breath พัง 100%
--- PC ไม่มีปัญหานี้ จึงยังคงใช้ hook ได้ตามปกติ
-if not _isMobileDevice then
-    local oldNewIndex
-    oldNewIndex = hookmetamethod(game, "__newindex", newcclosure(function(self, idx, val)
-        if cameraHardLockEnabled and idx == "CameraSubject" and not checkcaller() then
-            if self == workspace.CurrentCamera then
-                return nil 
-            end
-        end
-        return oldNewIndex(self, idx, val)
-    end))
-    warn("✈️ [PC] __newindex hook installed (camera lock)")
-else
-    warn("📱 [Mobile] __newindex hook SKIPPED (fire breath protection)")
-end
+-- ปิด __newindex ชั่วคราวเพื่อหาสาเหตุอาการตัวแข็ง
+-- local oldNewIndex
+-- oldNewIndex = hookmetamethod(game, "__newindex", newcclosure(function(...) return oldNewIndex(...) end))
 
 -- ============================================================
 -- [[ 🛡️ GHOST MODE 3.0: HEARTBEAT-DRIVEN INVINCIBILITY ]]
@@ -1703,29 +1664,11 @@ task.spawn(function()
             else
                 stopGhostHeartbeat()
                 disableHardCameraLock()
-                -- ฟื้นฟูค่า CanCollide, CanTouch ให้systemเป็นปกติ
+                -- ⚠️ ยกเลิกการบังคับเขียน CanCollide=true ทับทั้งโมเดลมังกรและคน!
+                -- การบังคับทำ CanCollide=true ในชิ้นส่วนที่ควรมองไม่เห็น (Hitbox) ทำให้มังกรบัคตัวแข็ง
+                
+                -- แค่เคลียร์แคช เพื่อให้ตอนเปิดโหมด Ghost ใหม่มันดึงตารางชิ้นส่วนใหม่
                 pcall(function()
-                    local char = LP.Character
-                    local dragon = getActiveDragonModel()
-                    if char then
-                        for _, v in pairs(char:GetDescendants()) do
-                            if v:IsA("BasePart") then 
-                                v.CanCollide = true 
-                                v.CanTouch = true
-                                v.CanQuery = true
-                            end
-                        end
-                    end
-                    if dragon then
-                        for _, v in pairs(dragon:GetDescendants()) do
-                            if v:IsA("BasePart") then 
-                                v.CanCollide = true 
-                                v.CanTouch = true
-                                v.CanQuery = true
-                            end
-                        end
-                    end
-                    -- รีเซ็ตแคชเพื่อเวลาเปิดใหม่จะได้สแกนใหม่
                     noclipCacheChar = nil
                     noclipCacheDragon = nil
                 end)
