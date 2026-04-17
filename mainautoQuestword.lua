@@ -578,7 +578,7 @@ local function applyGhostPhysicsStep()
             if isGhost then
                 -- [[ 👻 GHOST MODE ]]
                 part.CanTouch = true -- เปิดเพื่อเก็บของได้ (อมตะผ่าน MobDamageRemote block + Heal 60fps)
-                part.CanQuery = false -- กันมอนสแกนเจอ
+                part.CanQuery = true -- ⚠️ ฟิกซ์บักมือถือพ่นไฟไม่ออก: ต้องเปิดไว้เพราะเกมใช้ Raycast ตรวจจับทิศทางพ่นไฟ
                 if part.Name == "HumanoidRootPart" then
                     part.CanCollide = true -- กันตกพื้น
                 else
@@ -602,7 +602,7 @@ local function applyGhostPhysicsStep()
         if part and part.Parent then
             if isGhost then
                 part.CanTouch = true -- เปิดเพื่อเก็บของได้ (อมตะผ่าน MobDamageRemote block + Heal 60fps)
-                part.CanQuery = false
+                part.CanQuery = true -- ⚠️ ฟิกซ์บักพ่นไฟไม่ออกบนมือถือ
                 if part.Name == "HumanoidRootPart" then
                     part.CanCollide = true
                 else
@@ -865,24 +865,31 @@ local function findChests(amount, flagKey, worldName)
             -- 🚀 บินไปอยู่เหนือหีบเตรียมทำพายุพ่นไฟ
             flyTo(CFrame.new(chestPos + Vector3.new(0, 8, 0)))
             
-            -- ฟังก์ชันจำลองการกดปุ่มพ่นไฟในจอมือถือ
-            local function toggleMobileFire()
+            -- ฟังก์ชันจำลองการกดปุ่มพ่นไฟด้วยระบบค้นหาด้วยรูปภาพ (Image Tracking)
+            local function toggleMobileFire(targetImageId)
                 local UIS = game:GetService("UserInputService")
                 if not UIS.TouchEnabled then return end
                 
-                local fireBtn = LP:FindFirstChild("PlayerGui") 
-                    and LP.PlayerGui:FindFirstChild("HUDGui") 
-                    and LP.PlayerGui.HUDGui:FindFirstChild("BottomFrame") 
-                    and LP.PlayerGui.HUDGui.BottomFrame:FindFirstChild("MobileControlsFrame") 
-                    and LP.PlayerGui.HUDGui.BottomFrame.MobileControlsFrame:FindFirstChild("TouchControlFrame") 
-                    and LP.PlayerGui.HUDGui.BottomFrame.MobileControlsFrame.TouchControlFrame:FindFirstChild("JumpButton") 
-                    and LP.PlayerGui.HUDGui.BottomFrame.MobileControlsFrame.TouchControlFrame.JumpButton:FindFirstChild("Frame") 
-                    and LP.PlayerGui.HUDGui.BottomFrame.MobileControlsFrame.TouchControlFrame.JumpButton.Frame:FindFirstChild("Fire")
+                -- สแกนหาปุ่มที่เป็นรูปไฟพ่นจากทั่วทั้ง PlayerGui
+                local fireBtn = nil
+                local pGui = LP:FindFirstChild("PlayerGui")
+                if pGui then
+                    for _, gui in pairs(pGui:GetDescendants()) do
+                        if (gui:IsA("ImageButton") or gui:IsA("ImageLabel")) and gui.Visible then
+                            if string.match(tostring(gui.Image), targetImageId) then
+                                fireBtn = gui
+                                break
+                            end
+                        end
+                    end
+                end
                 
-                if fireBtn and fireBtn.Visible then
+                -- ถ้าหาปุ่มเจอ ให้ดึงพิกัดกึ่งกลางและจำลองการแตะ
+                if fireBtn then
                     local btnPos = fireBtn.AbsolutePosition
                     local btnSize = fireBtn.AbsoluteSize
-                    -- หาจุดกึ่งกลางของปุ่ม (บวก Topbar Inset ชดเชยสำหรับหน้าจอมือถือ)
+                    
+                    -- หาจุดกึ่งกลางของปุ่ม (บวก 36 ชดเชยขอบบน Topbar)
                     local cx = btnPos.X + (btnSize.X / 2)
                     local cy = btnPos.Y + (btnSize.Y / 2) + 36 
                     
@@ -904,7 +911,8 @@ local function findChests(amount, flagKey, worldName)
             if dragon then pcall(refillDragonBreathFuel, dragon) end
             
             if isMobile then
-                toggleMobileFire() -- แตะปุ่ม UI 1 ครั้งเพื่อเริ่มพ่น
+                -- TODO: ใส่รหัสภาพที่สแกนได้ตรงนี้
+                toggleMobileFire("รหัสภาพของลูกพี่") -- แตะปุ่ม UI 1 ครั้งเพื่อเริ่มพ่น
             else
                 if breathR then breathR:FireServer(true) end
             end
@@ -971,7 +979,7 @@ local function findChests(amount, flagKey, worldName)
             
             -- ปิดไฟพ่น
             if isMobile then
-                toggleMobileFire() -- แตะปุ่ม UI อีก 1 ครั้งเพื่อยกเลิกพ่น
+                toggleMobileFire("รหัสภาพของลูกพี่") -- แตะปุ่ม UI อีก 1 ครั้งเพื่อยกเลิกพ่น
             else
                 if breathR then breathR:FireServer(false) end
             end
