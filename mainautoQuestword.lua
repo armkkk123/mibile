@@ -45,92 +45,22 @@ local function showCenterWarning(active, text)
 end
 
 -- [[ 🛡️ SHIELD + 👻 GHOST MODE DAMAGE BLOCKER ]]
--- [[ 🛡️ SHIELD + 👻 GHOST MODE DAMAGE BLOCKER ]]
--- ⚠️ Mobile-Safe: ข้าม Hook ทุกชนิดแบบ 100% บนมือถือ
--- Mobile Executors (Delta/Fluxus) มีปัญหาเรื่อง hookmetamethod ที่ทำให้ Remote Arguments คลาดเคลื่อน
--- อาการ: เกมรับรู้ว่ากดพ่นไฟ (ตัวแข็ง/ล็อคเดิน) แต่เซิร์ฟเวอร์ไม่ตอบสนอง เพราะ Remote ส่งข้อมูลแหว่ง
-local _isMobileDevice = game:GetService("UserInputService").TouchEnabled
 local oldNamecall
-
-if not _isMobileDevice then
-    oldNamecall = hookmetamethod(game, "__namecall", newcclosure(function(self, ...)
-        local method = getnamecallmethod()
-        -- ⚡ Fast exit: ถ้าไม่ใช่ FireServer/InvokeServer ปล่อยผ่านทันที
-        if method ~= "FireServer" and method ~= "InvokeServer" then
-            return oldNamecall(self, ...)
+oldNamecall = hookmetamethod(game, "__namecall", newcclosure(function(self, ...)
+    local method = getnamecallmethod()
+    if not checkcaller() and (method == "FireServer" or method == "InvokeServer") then
+        -- ⚡ Super Fast Check: ไม่ใช้ pcall เพราะมันสร้างขยะ RAM (Lag) มหาศาลเมื่อเรียกทุกเสี้ยวseconds
+        if typeof(self) == "Instance" then
+            local n = self.Name
+            if n == "Ban" or n == "Kick" or n == "Report" then return nil end
+            if n == "Ban" or n == "Kick" or n == "Report" then return nil end
+            -- [[ 👻 GHOST MODE: Network-level damage blocking ]]
+            -- Client won't send data "dragon got hit" to Server
+            if _G.GhostMode and n == "MobDamageRemote" then return nil end
         end
-        if not checkcaller() then
-            if typeof(self) == "Instance" then
-                local n = self.Name
-                if n == "Ban" or n == "Kick" or n == "Report" then return nil end
-                -- [[ 👻 GHOST MODE: Network-level damage blocking ]]
-                if _G.GhostMode and n == "MobDamageRemote" then return nil end
-            end
-        end
-        return oldNamecall(self, ...)
-    end))
-    warn("🛡️ [PC] __namecall hook installed (Anti-Ban/GhostMode)")
-else
-    warn("📱 [Mobile] __namecall hook SKIPPED (Bypassing executor vararg corruption)")
-end
-
--- [[ 📱 Mobile-Safe: ระบบอมตะแบบตัดสาย Remote (ไม่ต้องใช้ hookmetamethod) ]]
--- แทนที่จะใช้ hookmetamethod เราจะไปตัดสาย .OnClientEvent ของ MobDamageRemote ทิ้งโดยตรง
--- และเปลี่ยน FireServer เป็นฟังก์ชันเปล่าที่ไม่ทำอะไร เพื่อกันเกมส่งดาเมจเข้ามังกร
--- วิธีนี้ไม่ต้องใช้ hookmetamethod เลย เลยไม่พังระบบพ่นไฟ!
-local _mobDmgBlocked = false
-local _mobDmgSavedConnections = {}
-local _originalMobDmgFireServer = nil
-
-local function blockMobDamageRemote()
-    if _mobDmgBlocked then return end
-    _mobDmgBlocked = true
-    
-    pcall(function()
-        local Remotes = ReplicatedStorage:WaitForChild("Remotes", 5)
-        local mobDmgRemote = Remotes and Remotes:FindFirstChild("MobDamageRemote")
-        if not mobDmgRemote then return end
-        
-        -- ตัดสาย connection ทั้งหมดของเกมที่ผูกไว้กับ MobDamageRemote เพื่อไม่ให้เกมรับรู้ว่าโดนตี
-        if getconnections then
-            for _, conn in pairs(getconnections(mobDmgRemote.OnClientEvent)) do
-                table.insert(_mobDmgSavedConnections, conn)
-                pcall(function() conn:Disable() end)
-            end
-        end
-        
-        -- เปลี่ยน FireServer เป็นฟังก์ชันเปล่า (ไม่ส่ง remote จริงๆ)
-        _originalMobDmgFireServer = mobDmgRemote.FireServer
-        mobDmgRemote.FireServer = function() return nil end
-        
-        warn("📱 [กันดาเมจ] MobDamageRemote ถูกตัดสายแล้ว! อมตะ 100%")
-    end)
-end
-
-local function unblockMobDamageRemote()
-    if not _mobDmgBlocked then return end
-    _mobDmgBlocked = false
-    
-    pcall(function()
-        local Remotes = ReplicatedStorage:WaitForChild("Remotes", 5)
-        local mobDmgRemote = Remotes and Remotes:FindFirstChild("MobDamageRemote")
-        if not mobDmgRemote then return end
-        
-        -- คืนสาย connection เดิม
-        for _, conn in ipairs(_mobDmgSavedConnections) do
-            pcall(function() conn:Enable() end)
-        end
-        _mobDmgSavedConnections = {}
-        
-        -- คืน FireServer เดิม
-        if _originalMobDmgFireServer then
-            mobDmgRemote.FireServer = _originalMobDmgFireServer
-            _originalMobDmgFireServer = nil
-        end
-        
-        warn("📱 [คืนสถานะ] MobDamageRemote กลับมาปกติ")
-    end)
-end
+    end
+    return oldNamecall(self, ...)
+end))
 
 -- [[ 🧲 AUTO COLLECT DROPS (MAGNET) ]]
 task.spawn(function()
@@ -648,7 +578,7 @@ local function applyGhostPhysicsStep()
             if isGhost then
                 -- [[ 👻 GHOST MODE ]]
                 part.CanTouch = true -- เปิดเพื่อเก็บของได้ (อมตะผ่าน MobDamageRemote block + Heal 60fps)
-                part.CanQuery = true -- ⚠️ ฟิกซ์บักมือถือพ่นไฟไม่ออก: ต้องเปิดไว้เพราะเกมใช้ Raycast ตรวจจับทิศทางพ่นไฟ
+                part.CanQuery = false -- กันมอนสแกนเจอ
                 if part.Name == "HumanoidRootPart" then
                     part.CanCollide = true -- กันตกพื้น
                 else
@@ -667,11 +597,28 @@ local function applyGhostPhysicsStep()
         end
     end
 
-    -- ปิดการยุ่งเกี่ยวกับระบบฟิสิกส์ (CanCollide/CanQuery) ของมังกรอย่างถาวร
-    -- ⚠️ ฟิกซ์บัก: หน้าที่ของการเป็นอมตะใช้แค่ส่ง Heal() 60fps และบล็อก MobDamageRemote ก็รอด 100% แล้ว
-    -- การไปแก้ฟิสิกส์มังกรทำให้เกมส่วนอื่น (เช่น พ่นไฟ อนิเมชั่น และ Raycast บนมือถือ) พังหมด
-    -- ปล่อยให้มังกรเป็น Solis/Physical 100% ตามธรรมชาติของเกม
-    -- (ชิ้นส่วนตัวละคร Player ยังเป็นวิญญาณอยู่เหมือนเดิมเพื่อกันมอนติดหัว)
+    -- อัปเดตชิ้นส่วนมังกร
+    for _, part in ipairs(noclipDragonParts) do
+        if part and part.Parent then
+            if isGhost then
+                part.CanTouch = true -- เปิดเพื่อเก็บของได้ (อมตะผ่าน MobDamageRemote block + Heal 60fps)
+                part.CanQuery = false
+                if part.Name == "HumanoidRootPart" then
+                    part.CanCollide = true
+                else
+                    part.CanCollide = false
+                end
+            else
+                part.CanTouch = true
+                part.CanQuery = true
+                if part.Name == "HumanoidRootPart" then
+                    part.CanCollide = true
+                else
+                    part.CanCollide = false
+                end
+            end
+        end
+    end
 end
 
 local function lockPlayerToMonster(target, height)
@@ -918,77 +865,14 @@ local function findChests(amount, flagKey, worldName)
             -- 🚀 บินไปอยู่เหนือหีบเตรียมทำพายุพ่นไฟ
             flyTo(CFrame.new(chestPos + Vector3.new(0, 8, 0)))
             
-            -- ฟังก์ชันจำลองการกดปุ่มพ่นไฟ (ใช้ Path จากผลสแกนของลูกพี่ เป็นการแตะ 1 ครั้ง)
-            local function toggleMobileFire()
-                local UIS = game:GetService("UserInputService")
-                if not UIS.TouchEnabled then return end
-                
-                -- ดึงปุ่มตาม Path ที่สแกนได้เป๊ะๆ
-                local fireBtn = LP:FindFirstChild("PlayerGui") 
-                    and LP.PlayerGui:FindFirstChild("HUDGui") 
-                    and LP.PlayerGui.HUDGui:FindFirstChild("BottomFrame") 
-                    and LP.PlayerGui.HUDGui.BottomFrame:FindFirstChild("MobileControlsFrame") 
-                    and LP.PlayerGui.HUDGui.BottomFrame.MobileControlsFrame:FindFirstChild("TouchControlFrame") 
-                    and LP.PlayerGui.HUDGui.BottomFrame.MobileControlsFrame.TouchControlFrame:FindFirstChild("JumpButton") 
-                    and LP.PlayerGui.HUDGui.BottomFrame.MobileControlsFrame.TouchControlFrame.JumpButton:FindFirstChild("Frame") 
-                    and LP.PlayerGui.HUDGui.BottomFrame.MobileControlsFrame.TouchControlFrame.JumpButton.Frame:FindFirstChild("Fire")
-                
-                -- ถ้าหาปุ่มเจอ ให้ดึงพิกัดกึ่งกลางและจำลองการแตะ
-                if fireBtn and (fireBtn:IsA("GuiObject")) then
-                    local btnPos = fireBtn.AbsolutePosition
-                    local btnSize = fireBtn.AbsoluteSize
-                    
-                    -- หาจุดกึ่งกลางของปุ่ม (บวก 36 ชดเชยขอบบน Topbar)
-                    local cx = btnPos.X + (btnSize.X / 2)
-                    local cy = btnPos.Y + (btnSize.Y / 2) + 36 
-                    
-                    pcall(function()
-                        local vim = game:GetService("VirtualInputManager")
-                        vim:SendTouchEvent(12, 0, cx, cy) -- แตะลง
-                        task.wait(0.05)
-                        vim:SendTouchEvent(12, 2, cx, cy) -- ปล่อยนิ้ว
-                    end)
-                end
-            end
-
-            -- ฟังก์ชันกดปุ่มพ่นไฟ (ใช้จำลองเมาส์คลิก - ผ่านการทดสอบแยกแล้วว่าใช้ได้ 100%)
-            local function toggleMobileFire()
-                pcall(function()
-                    local fireBtn = LP:FindFirstChild("PlayerGui") 
-                        and LP.PlayerGui:FindFirstChild("HUDGui") 
-                        and LP.PlayerGui.HUDGui:FindFirstChild("BottomFrame") 
-                        and LP.PlayerGui.HUDGui.BottomFrame:FindFirstChild("MobileControlsFrame") 
-                        and LP.PlayerGui.HUDGui.BottomFrame.MobileControlsFrame:FindFirstChild("TouchControlFrame") 
-                        and LP.PlayerGui.HUDGui.BottomFrame.MobileControlsFrame.TouchControlFrame:FindFirstChild("JumpButton") 
-                        and LP.PlayerGui.HUDGui.BottomFrame.MobileControlsFrame.TouchControlFrame.JumpButton:FindFirstChild("Frame") 
-                        and LP.PlayerGui.HUDGui.BottomFrame.MobileControlsFrame.TouchControlFrame.JumpButton.Frame:FindFirstChild("Fire")
-                    
-                    if fireBtn and fireBtn:IsA("GuiObject") then
-                        local inset, _ = game:GetService("GuiService"):GetGuiInset()
-                        local cx = fireBtn.AbsolutePosition.X + (fireBtn.AbsoluteSize.X / 2) + inset.X
-                        local cy = fireBtn.AbsolutePosition.Y + (fireBtn.AbsoluteSize.Y / 2) + inset.Y
-                        
-                        local vim = game:GetService("VirtualInputManager")
-                        vim:SendMouseButtonEvent(cx, cy, 0, true, game, 0) -- กดเมาส์ซ้ายลง
-                        task.wait(0.05)
-                        vim:SendMouseButtonEvent(cx, cy, 0, false, game, 0) -- ปล่อยเมาส์ซ้าย
-                    end
-                end)
-            end
-            
             -- เปิดไฟพ่น
             local dragon = getActiveDragonModel()
             local breathR = dragon and dragon:FindFirstChild("Remotes") and dragon.Remotes:FindFirstChild("BreathFireRemote")
-            local isMobile = game:GetService("UserInputService").TouchEnabled
-            
-            -- รีฟิลหลอดพ่นไฟให้เต็มก่อน (แก้บัคกดพ่นแล้วไม่ออกเพราะมานาหมด)
-            if dragon then pcall(refillDragonBreathFuel, dragon) end
-            
-            if isMobile then
-                toggleMobileFire() -- สั่งแตะปุ่ม UI 1 ครั้งเพื่อเปิดพ่นไฟ
-            else
-                if breathR then breathR:FireServer(true) end
-            end
+            if breathR then breathR:FireServer(true) end
+            -- 📱 Mobile: เปิดระบบจำลองคลิกปุ่มพ่นไฟบน UI
+            toggleMobileFire(true)
+            -- เติมเกจพ่นไฟก่อนตีหีบ
+            refillDragonBreathFuel(dragon)
             
             -- 🌪️ ระบบหมุนควงสว่าน 360 องศา (X และ Y)
             unlockPlayerFromMonster() -- ปลดล็อคระบบเดิมก่อน
@@ -1017,23 +901,19 @@ local function findChests(amount, flagKey, worldName)
                 local dead = hrp:FindFirstChild("Dead")
                 if (dead and dead.Value == true) or (hp and hp.Value <= 0) then break end
                 
+                -- ระบบป้องกันหีบบัค: ถ้าติดเกิน 5 วิ แสดงว่าบัค ให้ทำลายหีบนั้นทิ้งและข้ามทันที
                 if os.clock() - t > 5 then 
                     pcall(function() nearest:Destroy() end)
                     warn("⚠️ [Chest Finder] ข้ามหีบเนื่องจากบัค (ใช้เวลาเกิน 5 seconds)")
                     break 
                 end
                 
-                -- รีฟิลเกจตลอดระหว่างตี
-                if dragon then pcall(refillDragonBreathFuel, dragon) end
-                
-                -- โจมตี Backup: สำหรับ PC ให้ส่งเมาส์คลิกคลิกได้ไม่มีปัญหา
-                -- แต่บนมือถือ ยกเลิกการจำลองจิ้มกลางจอ เพราะมันไปกวนการแตะหน้าจอ/กดปุ่ม UI รัวๆ
+                -- 💥 จำลองคลิค (Mobile = Touch Tap, PC = Mouse Click)
+                -- mobile executor (Delta/Fluxus) จะแปลงเป็น Touch ให้อัตโนมัติ
                 pcall(function()
-                    if not isMobile then
-                        mouse1press()
-                        task.wait(0.05)
-                        mouse1release()
-                    end
+                    mouse1press()
+                    task.wait(0.1)
+                    mouse1release()
                 end)
                 task.wait(0.15)
             end
@@ -1041,13 +921,9 @@ local function findChests(amount, flagKey, worldName)
             -- หยุดหมุน 360 องศาเมื่อหีบพังเสร็จแล้ว
             chestLocker = false
             if spinConn then spinConn:Disconnect() spinConn = nil end
-            
-            -- ปิดไฟพ่น
-            if isMobile then
-                toggleMobileFire() -- สั่งแตะปุ่ม UI อีก 1 ครั้งเพื่อปิดพ่นไฟ
-            else
-                if breathR then breathR:FireServer(false) end
-            end
+            if breathR then breathR:FireServer(false) end
+            -- 📱 Mobile: ปิดระบบจำลองคลิกปุ่มพ่นไฟ
+            toggleMobileFire(false)
 
             -- เปิดหีบเก็บของ
             local nodeID = tonumber(nearest.Parent and nearest.Parent.Name)
@@ -1127,6 +1003,53 @@ _G.AutoQuestWasteland = false
 local vim = game:GetService("VirtualInputManager")
 local Remotes = ReplicatedStorage:WaitForChild("Remotes")
 local HitRemote = Remotes:FindFirstChild("ClientDestructibleHitRemote")
+
+-- [[ 📱 MOBILE FIRE SYSTEM: จำลองคลิกปุ่มพ่นไฟบน UI สำหรับมือถือ ]]
+-- ใช้ SendMouseButtonEvent คลิกปุ่ม Fire ใน GUI ของเกม (ผ่านเทสแล้ว 100%)
+-- ไม่แตะ hookmetamethod เลย! ไม่มีทางทำให้ระบบอมตะพัง!
+local _isMobileDevice = game:GetService("UserInputService").TouchEnabled
+
+local _mobileFireActive = false
+local _mobileFireThread = nil
+
+local function findFireButton()
+    local pg = LP:FindFirstChild("PlayerGui")
+    if not pg then return nil end
+    for _, desc in ipairs(pg:GetDescendants()) do
+        if desc:IsA("GuiButton") and desc.Name == "Fire" and desc.Visible then
+            return desc
+        end
+    end
+    return nil
+end
+
+local function toggleMobileFire(state)
+    if not _isMobileDevice then return end
+    if state then
+        if _mobileFireActive then return end
+        _mobileFireActive = true
+        _mobileFireThread = task.spawn(function()
+            while _mobileFireActive do
+                pcall(function()
+                    local btn = findFireButton()
+                    if btn then
+                        local pos = btn.AbsolutePosition
+                        local size = btn.AbsoluteSize
+                        local cx = pos.X + size.X / 2
+                        local cy = pos.Y + size.Y / 2 + 36
+                        vim:SendMouseButtonEvent(cx, cy, 0, true, game, 0)
+                        task.wait(0.05)
+                        vim:SendMouseButtonEvent(cx, cy, 0, false, game, 0)
+                    end
+                end)
+                task.wait(0.15)
+            end
+        end)
+    else
+        _mobileFireActive = false
+        _mobileFireThread = nil
+    end
+end
 
 local function fastClick(obj)
     if not obj then return end
@@ -1683,24 +1606,17 @@ end
 -- ============================================================
 -- [[ ✈️ FIX TWEEN SHAKE - แก้อาการสั่นตอนเคลื่อนที่ ]]
 -- ============================================================
--- ⚠️ Mobile-Safe: ข้าม __newindex hook บนมือถือเด็ดขาด!
--- เหตุผล: Mobile executor (Delta/Fluxus) มีบัคเรื่อง hookmetamethod(__newindex)
--- ทำให้ property writes ของเกมหายไปเงียบๆ → Dragon Fire Breath พัง 100%
--- PC ไม่มีปัญหานี้ จึงยังคงใช้ hook ได้ตามปกติ
-if not _isMobileDevice then
-    local oldNewIndex
-    oldNewIndex = hookmetamethod(game, "__newindex", newcclosure(function(self, idx, val)
-        if cameraHardLockEnabled and idx == "CameraSubject" and not checkcaller() then
-            if self == workspace.CurrentCamera then
-                return nil 
-            end
+-- Hook __newindex เพื่อบล็อกเกมจากการเปลี่ยนกล้อง
+local oldNewIndex
+oldNewIndex = hookmetamethod(game, "__newindex", newcclosure(function(self, idx, val)
+    -- สลับลำดับเช็คเพื่อหยุดการเข้าถึง C++ Object ลึกซึ้ง (ลดกาดร้อป FPS เวลาเกมรันกราฟิกรัวๆ)
+    if cameraHardLockEnabled and idx == "CameraSubject" and not checkcaller() then
+        if self == workspace.CurrentCamera then
+            return nil 
         end
-        return oldNewIndex(self, idx, val)
-    end))
-    warn("✈️ [PC] __newindex hook installed (camera lock)")
-else
-    warn("📱 [Mobile] __newindex hook SKIPPED (fire breath protection)")
-end
+    end
+    return oldNewIndex(self, idx, val)
+end))
 
 -- ============================================================
 -- [[ 🛡️ GHOST MODE 3.0: HEARTBEAT-DRIVEN INVINCIBILITY ]]
@@ -1717,14 +1633,14 @@ local ghostHeartbeatConnection = nil
              -- [[ 👻 GHOST PHYSICS: ปิด CanTouch/CanQuery ทุกเฟรม (~60fps) ]]
              applyGhostPhysicsStep()
  
-             -- [[ 🩸 INSTANT HEAL (Humanoid): เติมเลือดโมเดลทุกเฟรม แบบเช็คก่อนเขียน (กันบัคกดยกเลิกในมือถือ) ]]
+             -- [[ 🩸 INSTANT HEAL (Humanoid): เติมเลือดโมเดลทุกเฟรม ]]
              local char = LP.Character
              local p_hum = char and char:FindFirstChildOfClass("Humanoid")
-             if p_hum and p_hum.Health < p_hum.MaxHealth then p_hum.Health = p_hum.MaxHealth end
+             if p_hum then p_hum.Health = p_hum.MaxHealth end
  
              local dragonModel = getActiveDragonModel()
              local d_hum = dragonModel and dragonModel:FindFirstChildOfClass("Humanoid")
-             if d_hum and d_hum.Health < d_hum.MaxHealth then d_hum.Health = d_hum.MaxHealth end
+             if d_hum then d_hum.Health = d_hum.MaxHealth end
  
              -- [[ 🛡️ ULTIMATE DATA HEAL (Anti-Boss): กันบอสตีเข้าเลือดจริง ]]
              local data = LP:FindFirstChild("Data")
@@ -1734,23 +1650,24 @@ local ghostHeartbeatConnection = nil
                      for _, dFolder in pairs(dragonsData:GetChildren()) do
                          local h = dFolder:FindFirstChild("Health")
                          local mh = dFolder:FindFirstChild("MaxHealth")
-                         if h and mh and h:IsA("ValueBase") and mh:IsA("ValueBase") and h.Value < mh.Value then 
-                             h.Value = mh.Value 
-                         end
+                         if h and mh and h:IsA("ValueBase") and mh:IsA("ValueBase") then h.Value = mh.Value end
                      end
                  end
                  local stats = data:FindFirstChild("Stats")
                  if stats then
                      local h = stats:FindFirstChild("Health")
                      local mh = stats:FindFirstChild("MaxHealth")
-                     if h and mh and h:IsA("ValueBase") and mh:IsA("ValueBase") and h.Value < mh.Value then 
-                         h.Value = mh.Value 
-                     end
+                     if h and mh and h:IsA("ValueBase") and mh:IsA("ValueBase") then h.Value = mh.Value end
                  end
              end
-             -- ⚠️ ถอดระบบ "รีฟิลพ่นไฟถาวรทุกๆ 0.5 วินาที" ออกจาก Ghost Mode
-             -- เพราะการยัดหลอดพ่นไฟให้เต็มรัวๆ มันไปรีเซ็ต UI ของมือถือ ทำให้เวลากดปุ่มพ่นค้างไว้ เกมจะสั่งยกเลิกเองรัวๆ
-             -- (ระบบ Auto Farm หีบ จะรีฟิลหลอดไฟก่อนพ่นด้วยตัวเองอยู่แล้ว ไม่ต้องให้ Ghost รีฟิลให้)
+ 
+             -- [[ 🔥 BREATH REFILL (Throttled) ]]
+             local now = os.clock()
+             
+             if now - lastBreathRefill >= 0.5 then
+                 lastBreathRefill = now
+                 refillDragonBreathFuel(dragonModel)
+             end
          end)
      end)
  end
@@ -1768,21 +1685,35 @@ task.spawn(function()
         local active = isAntiHitActive()
         if active ~= antiHitApplied then
             if active then
-                -- เปิดระบบอมตะ: บนมือถือใช้ระบบตัดสาย Remote, บน PC ใช้ Hook ที่มีอยู่แล้ว
-                if _isMobileDevice then
-                    blockMobDamageRemote()
-                end
                 applyHardCameraLock()
                 startGhostHeartbeat()
                 warn("🛡️ [Ghost 3.0] Heartbeat Protection ACTIVE (60fps)")
             else
-                -- ปิดระบบอมตะ: คืนสาย Remote บนมือถือ
-                if _isMobileDevice then
-                    unblockMobDamageRemote()
-                end
                 stopGhostHeartbeat()
                 disableHardCameraLock()
+                -- ฟื้นฟูค่า CanCollide, CanTouch ให้systemเป็นปกติ
                 pcall(function()
+                    local char = LP.Character
+                    local dragon = getActiveDragonModel()
+                    if char then
+                        for _, v in pairs(char:GetDescendants()) do
+                            if v:IsA("BasePart") then 
+                                v.CanCollide = true 
+                                v.CanTouch = true
+                                v.CanQuery = true
+                            end
+                        end
+                    end
+                    if dragon then
+                        for _, v in pairs(dragon:GetDescendants()) do
+                            if v:IsA("BasePart") then 
+                                v.CanCollide = true 
+                                v.CanTouch = true
+                                v.CanQuery = true
+                            end
+                        end
+                    end
+                    -- รีเซ็ตแคชเพื่อเวลาเปิดใหม่จะได้สแกนใหม่
                     noclipCacheChar = nil
                     noclipCacheDragon = nil
                 end)
@@ -1794,11 +1725,11 @@ task.spawn(function()
     end
 end)
 
-_G.GhostMode = false
+_G.GhostMode = true
 
 MainTab:CreateToggle({
     Name = "👻 Ghost Mode (Entity Bypass)",
-    CurrentValue = false,
+    CurrentValue = true,
     Flag = "GhostModeToggle",
     Callback = function(Value)
         _G.GhostMode = Value
