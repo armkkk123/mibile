@@ -45,17 +45,20 @@ local function showCenterWarning(active, text)
 end
 
 -- [[ 🛡️ SHIELD + 👻 GHOST MODE DAMAGE BLOCKER ]]
+-- ⚠️ Mobile-Safe: ใช้แค่ __namecall (ไม่ยุ่งกับ __newindex บนมือถือ)
+local _isMobileDevice = game:GetService("UserInputService").TouchEnabled
 local oldNamecall
 oldNamecall = hookmetamethod(game, "__namecall", newcclosure(function(self, ...)
     local method = getnamecallmethod()
-    if not checkcaller() and (method == "FireServer" or method == "InvokeServer") then
-        -- ⚡ Super Fast Check: ไม่ใช้ pcall เพราะมันสร้างขยะ RAM (Lag) มหาศาลเมื่อเรียกทุกเสี้ยวseconds
+    -- ⚡ Fast exit: ถ้าไม่ใช่ FireServer/InvokeServer ปล่อยผ่านทันที (ไม่แตะ method อื่นเลย)
+    if method ~= "FireServer" and method ~= "InvokeServer" then
+        return oldNamecall(self, ...)
+    end
+    if not checkcaller() then
         if typeof(self) == "Instance" then
             local n = self.Name
             if n == "Ban" or n == "Kick" or n == "Report" then return nil end
-            if n == "Ban" or n == "Kick" or n == "Report" then return nil end
             -- [[ 👻 GHOST MODE: Network-level damage blocking ]]
-            -- Client won't send data "dragon got hit" to Server
             if _G.GhostMode and n == "MobDamageRemote" then return nil end
         end
     end
@@ -1601,17 +1604,24 @@ end
 -- ============================================================
 -- [[ ✈️ FIX TWEEN SHAKE - แก้อาการสั่นตอนเคลื่อนที่ ]]
 -- ============================================================
--- Hook __newindex เพื่อบล็อกเกมจากการเปลี่ยนกล้อง
-local oldNewIndex
-oldNewIndex = hookmetamethod(game, "__newindex", newcclosure(function(self, idx, val)
-    -- สลับลำดับเช็คเพื่อหยุดการเข้าถึง C++ Object ลึกซึ้ง (ลดกาดร้อป FPS เวลาเกมรันกราฟิกรัวๆ)
-    if cameraHardLockEnabled and idx == "CameraSubject" and not checkcaller() then
-        if self == workspace.CurrentCamera then
-            return nil 
+-- ⚠️ Mobile-Safe: ข้าม __newindex hook บนมือถือเด็ดขาด!
+-- เหตุผล: Mobile executor (Delta/Fluxus) มีบัคเรื่อง hookmetamethod(__newindex)
+-- ทำให้ property writes ของเกมหายไปเงียบๆ → Dragon Fire Breath พัง 100%
+-- PC ไม่มีปัญหานี้ จึงยังคงใช้ hook ได้ตามปกติ
+if not _isMobileDevice then
+    local oldNewIndex
+    oldNewIndex = hookmetamethod(game, "__newindex", newcclosure(function(self, idx, val)
+        if cameraHardLockEnabled and idx == "CameraSubject" and not checkcaller() then
+            if self == workspace.CurrentCamera then
+                return nil 
+            end
         end
-    end
-    return oldNewIndex(self, idx, val)
-end))
+        return oldNewIndex(self, idx, val)
+    end))
+    warn("✈️ [PC] __newindex hook installed (camera lock)")
+else
+    warn("📱 [Mobile] __newindex hook SKIPPED (fire breath protection)")
+end
 
 -- ============================================================
 -- [[ 🛡️ GHOST MODE 3.0: HEARTBEAT-DRIVEN INVINCIBILITY ]]
