@@ -597,28 +597,11 @@ local function applyGhostPhysicsStep()
         end
     end
 
-    -- อัปเดตชิ้นส่วนมังกร
-    for _, part in ipairs(noclipDragonParts) do
-        if part and part.Parent then
-            if isGhost then
-                part.CanTouch = true -- เปิดเพื่อเก็บของได้ (อมตะผ่าน MobDamageRemote block + Heal 60fps)
-                part.CanQuery = true -- ⚠️ ฟิกซ์บักพ่นไฟไม่ออกบนมือถือ
-                if part.Name == "HumanoidRootPart" then
-                    part.CanCollide = true
-                else
-                    part.CanCollide = false
-                end
-            else
-                part.CanTouch = true
-                part.CanQuery = true
-                if part.Name == "HumanoidRootPart" then
-                    part.CanCollide = true
-                else
-                    part.CanCollide = false
-                end
-            end
-        end
-    end
+    -- ปิดการยุ่งเกี่ยวกับระบบฟิสิกส์ (CanCollide/CanQuery) ของมังกรอย่างถาวร
+    -- ⚠️ ฟิกซ์บัก: หน้าที่ของการเป็นอมตะใช้แค่ส่ง Heal() 60fps และบล็อก MobDamageRemote ก็รอด 100% แล้ว
+    -- การไปแก้ฟิสิกส์มังกรทำให้เกมส่วนอื่น (เช่น พ่นไฟ อนิเมชั่น และ Raycast บนมือถือ) พังหมด
+    -- ปล่อยให้มังกรเป็น Solis/Physical 100% ตามธรรมชาติของเกม
+    -- (ชิ้นส่วนตัวละคร Player ยังเป็นวิญญาณอยู่เหมือนเดิมเพื่อกันมอนติดหัว)
 end
 
 local function lockPlayerToMonster(target, height)
