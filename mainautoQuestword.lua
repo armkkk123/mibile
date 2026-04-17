@@ -860,7 +860,7 @@ local function findChests(amount, flagKey, worldName)
             -- 🚀 บินไปอยู่เหนือหีบเตรียมทำพายุพ่นไฟ
             flyTo(CFrame.new(chestPos + Vector3.new(0, 8, 0)))
             
-            -- ฟังก์ชันจำลองการกดปุ่มพ่นไฟ (ใช้ Path จากผลสแกนของลูกพี่)
+            -- ฟังก์ชันจำลองการกดปุ่มพ่นไฟ (ใช้ Path จากผลสแกนของลูกพี่ เป็นการแตะ 1 ครั้ง)
             local function toggleMobileFire()
                 local UIS = game:GetService("UserInputService")
                 if not UIS.TouchEnabled then return end
@@ -886,9 +886,9 @@ local function findChests(amount, flagKey, worldName)
                     
                     pcall(function()
                         local vim = game:GetService("VirtualInputManager")
-                        vim:SendTouchEvent(0, 0, cx, cy) -- แตะลง
+                        vim:SendTouchEvent(12, 0, cx, cy) -- แตะลง
                         task.wait(0.05)
-                        vim:SendTouchEvent(0, 2, cx, cy) -- ปล่อยนิ้ว
+                        vim:SendTouchEvent(12, 2, cx, cy) -- ปล่อยนิ้ว
                     end)
                 end
             end
