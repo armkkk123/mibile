@@ -1638,14 +1638,14 @@ local ghostHeartbeatConnection = nil
              -- [[ 👻 GHOST PHYSICS: ปิด CanTouch/CanQuery ทุกเฟรม (~60fps) ]]
              applyGhostPhysicsStep()
  
-             -- [[ 🩸 INSTANT HEAL (Humanoid): เติมเลือดโมเดลทุกเฟรม ]]
+             -- [[ 🩸 INSTANT HEAL (Humanoid): เติมเลือดโมเดลทุกเฟรม แบบเช็คก่อนเขียน (กันบัคกดยกเลิกในมือถือ) ]]
              local char = LP.Character
              local p_hum = char and char:FindFirstChildOfClass("Humanoid")
-             if p_hum then p_hum.Health = p_hum.MaxHealth end
+             if p_hum and p_hum.Health < p_hum.MaxHealth then p_hum.Health = p_hum.MaxHealth end
  
              local dragonModel = getActiveDragonModel()
              local d_hum = dragonModel and dragonModel:FindFirstChildOfClass("Humanoid")
-             if d_hum then d_hum.Health = d_hum.MaxHealth end
+             if d_hum and d_hum.Health < d_hum.MaxHealth then d_hum.Health = d_hum.MaxHealth end
  
              -- [[ 🛡️ ULTIMATE DATA HEAL (Anti-Boss): กันบอสตีเข้าเลือดจริง ]]
              local data = LP:FindFirstChild("Data")
@@ -1655,24 +1655,23 @@ local ghostHeartbeatConnection = nil
                      for _, dFolder in pairs(dragonsData:GetChildren()) do
                          local h = dFolder:FindFirstChild("Health")
                          local mh = dFolder:FindFirstChild("MaxHealth")
-                         if h and mh and h:IsA("ValueBase") and mh:IsA("ValueBase") then h.Value = mh.Value end
+                         if h and mh and h:IsA("ValueBase") and mh:IsA("ValueBase") and h.Value < mh.Value then 
+                             h.Value = mh.Value 
+                         end
                      end
                  end
                  local stats = data:FindFirstChild("Stats")
                  if stats then
                      local h = stats:FindFirstChild("Health")
                      local mh = stats:FindFirstChild("MaxHealth")
-                     if h and mh and h:IsA("ValueBase") and mh:IsA("ValueBase") then h.Value = mh.Value end
+                     if h and mh and h:IsA("ValueBase") and mh:IsA("ValueBase") and h.Value < mh.Value then 
+                         h.Value = mh.Value 
+                     end
                  end
              end
- 
-             -- [[ 🔥 BREATH REFILL (Throttled) ]]
-             local now = os.clock()
-             
-             if now - lastBreathRefill >= 0.5 then
-                 lastBreathRefill = now
-                 refillDragonBreathFuel(dragonModel)
-             end
+             -- ⚠️ ถอดระบบ "รีฟิลพ่นไฟถาวรทุกๆ 0.5 วินาที" ออกจาก Ghost Mode
+             -- เพราะการยัดหลอดพ่นไฟให้เต็มรัวๆ มันไปรีเซ็ต UI ของมือถือ ทำให้เวลากดปุ่มพ่นค้างไว้ เกมจะสั่งยกเลิกเองรัวๆ
+             -- (ระบบ Auto Farm หีบ จะรีฟิลหลอดไฟก่อนพ่นด้วยตัวเองอยู่แล้ว ไม่ต้องให้ Ghost รีฟิลให้)
          end)
      end)
  end
@@ -1730,11 +1729,11 @@ task.spawn(function()
     end
 end)
 
-_G.GhostMode = true
+_G.GhostMode = false
 
 MainTab:CreateToggle({
     Name = "👻 Ghost Mode (Entity Bypass)",
-    CurrentValue = true,
+    CurrentValue = false,
     Flag = "GhostModeToggle",
     Callback = function(Value)
         _G.GhostMode = Value
