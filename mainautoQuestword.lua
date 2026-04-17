@@ -929,16 +929,16 @@ local function findChests(amount, flagKey, worldName)
                         end
                     end
                     
-                    -- ใช้ นิ้วจำลองที่แม่นยำที่สุด (ชดเชยค่ารอยบากของหน้าจอมือถือ)
+                    -- ใช้ เมาส์จำลอง แทนนิ้วจำลอง (เพราะ Executor บนมือถือส่วนใหญ่บัคระบบ Touch แต่รองรับ Mouse)
                     if fireBtn and fireBtn:IsA("GuiObject") then
                         local inset, _ = game:GetService("GuiService"):GetGuiInset()
                         local cx = fireBtn.AbsolutePosition.X + (fireBtn.AbsoluteSize.X / 2) + inset.X
                         local cy = fireBtn.AbsolutePosition.Y + (fireBtn.AbsoluteSize.Y / 2) + inset.Y
                         
                         local vim = game:GetService("VirtualInputManager")
-                        vim:SendTouchEvent(22, 0, cx, cy) -- แตะลง
+                        vim:SendMouseButtonEvent(cx, cy, 0, true, game, 0) -- กดเมาส์ซ้ายลง (เทียบเท่าการแตะ)
                         task.wait(0.05)
-                        vim:SendTouchEvent(22, 2, cx, cy) -- ปล่อยนิ้ว
+                        vim:SendMouseButtonEvent(cx, cy, 0, false, game, 0) -- ปล่อยเมาส์ซ้าย (เทียบเท่าปล่อยนิ้ว)
                     end
                 end)
             end
